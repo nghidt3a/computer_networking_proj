@@ -1,0 +1,107 @@
+/* --- GLOBAL RESET & TYPOGRAPHY --- */
+body {
+    background-color: var(--bg-body);
+    font-family: 'Inter', sans-serif;
+    color: var(--text-primary);
+    overflow-x: hidden;
+}
+
+/* --- APP WRAPPER (Flexbox Layout) --- */
+#app-wrapper {
+    display: flex;
+    width: 100%;
+    min-height: 100vh;
+    transition: opacity var(--transition-fast);
+}
+
+/* --- SIDEBAR --- */
+#sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width); /* Không bị co lại */
+    background-color: var(--bg-panel);
+    border-right: 1px solid #e5e7eb;
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-heading {
+    padding: 1.5rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--primary-color);
+    text-align: center;
+    border-bottom: 1px solid #f3f4f6;
+    height: var(--header-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+/* Sidebar Navigation Items */
+.list-group-item {
+    border: none;
+    padding: 16px 24px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: transparent;
+    transition: var(--transition-fast);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    width: 100%;
+    text-align: left;
+}
+
+.list-group-item:hover, 
+.list-group-item.active {
+    background-color: var(--primary-light);
+    color: var(--primary-color);
+}
+
+.list-group-item.active {
+    border-right: 4px solid var(--primary-color);
+    font-weight: 700;
+}
+
+/* --- MAIN CONTENT AREA --- */
+#page-content {
+    width: 100%;
+    margin-left: var(--sidebar-width); /* Chừa chỗ cho Sidebar */
+    padding: 30px;
+    flex-grow: 1;
+}
+
+/* Tab Content Logic */
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- UTILITIES --- */
+.disabled-ui {
+    pointer-events: none;
+    opacity: 0.6;
+    filter: grayscale(100%);
+    user-select: none;
+}
+
+.hidden {
+    display: none !important;
+}

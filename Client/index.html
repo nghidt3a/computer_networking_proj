@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RCS - Remote Control System</title>
+    
+    <!-- Fonts & External Libs -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Consolas&display=swap" rel="stylesheet"/>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"/>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+
+    <!-- Modular CSS Loading -->
+    <!-- Load biến trước để các file sau sử dụng -->
+    <link rel="stylesheet" href="css/variables.css" />
+    <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    
+    <!-- Load Module Styles (Có thể gộp thành modules.css nếu muốn gọn) -->
+    <link rel="stylesheet" href="css/modules/terminal.css" />
+    <link rel="stylesheet" href="css/modules/webcam.css" />
+    <link rel="stylesheet" href="css/modules/keylogger.css" />
+    <link rel="stylesheet" href="css/modules/monitor.css" />
+  </head>
+  
+  <body>
+    <!-- SECTION: LOGIN OVERLAY -->
+    <section id="login-overlay" class="overlay-container">
+      <div class="login-card">
+        <h2 class="mb-4 fw-bold text-primary">
+          <i class="fas fa-shield-alt"></i> RCS Login
+        </h2>
+        <form id="login-form" onsubmit="event.preventDefault();">
+            <div class="mb-3 text-start">
+            <label class="form-label small fw-bold">Server IP</label>
+            <input type="text" id="server-ip" class="form-control mb-2" value="localhost" />
+            <div class="row">
+                <div class="col-6">
+                <label class="form-label small fw-bold">Port</label>
+                <input type="number" id="server-port" class="form-control mb-2" value="8181" />
+                </div>
+                <div class="col-6">
+                <label class="form-label small fw-bold">Password</label>
+                <input type="password" id="auth-pass" class="form-control mb-2" value="123" />
+                </div>
+            </div>
+            </div>
+            <button type="submit" id="btn-connect" class="btn btn-primary w-100 fw-bold py-2">
+            CONNECT SYSTEM
+            </button>
+            <p id="login-error" class="mt-3 text-danger fw-bold small"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- APP WRAPPER -->
+    <div class="d-flex disabled-ui" id="app-wrapper">
+      
+      <!-- ASIDE: SIDEBAR NAVIGATION -->
+      <aside id="sidebar">
+        <div class="sidebar-heading">
+          <i class="fas fa-network-wired"></i> SYSTEM CORE
+        </div>
+        <nav class="list-group list-group-flush mt-3">
+          <button class="list-group-item active" data-tab="dashboard">
+            <i class="fas fa-chart-line"></i> Dashboard
+          </button>
+          <button class="list-group-item" data-tab="monitor">
+            <i class="fas fa-desktop"></i> Screen Monitor
+          </button>
+          <button class="list-group-item" data-tab="webcam">
+            <i class="fas fa-camera"></i> Webcam Control
+          </button>
+          <button class="list-group-item" data-tab="processes">
+            <i class="fas fa-tasks"></i> Process & Apps
+          </button>
+          <button class="list-group-item" data-tab="files" id="nav-files">
+            <i class="fas fa-folder-open"></i> File Manager
+          </button>
+          <button class="list-group-item" data-tab="terminal">
+            <i class="fas fa-terminal"></i> Terminal Logs
+          </button>
+          <button class="list-group-item text-danger mt-auto mb-4" id="btn-disconnect">
+            <i class="fas fa-sign-out-alt"></i> Disconnect
+          </button>
+        </nav>
+      </aside>
+
+      <!-- MAIN CONTENT AREA -->
+      <main id="page-content">
+        <header class="d-flex justify-content-between align-items-center mb-4">
+          <h3 class="fw-bold text-dark m-0" id="page-title">Overview</h3>
+          <span id="connection-badge" class="status-badge status-offline">
+            <i class="fas fa-circle"></i> Disconnected
+          </span>
+        </header>
+
+        <!-- Dynamic Content Sections -->
+        <section id="tab-dashboard" class="tab-content active">
+            <!-- Nội dung Dashboard cũ giữ nguyên, chỉ copy phần bên trong -->
+             <div class="alert alert-info">Dashboard Content Loaded Here</div>
+        </section>
+
+        <section id="tab-monitor" class="tab-content">
+             <!-- Nội dung Monitor -->
+        </section>
+
+        <section id="tab-webcam" class="tab-content">
+             <!-- Nội dung Webcam -->
+        </section>
+
+        <section id="tab-files" class="tab-content">
+             <!-- Nội dung File Manager -->
+        </section>
+
+        <section id="tab-processes" class="tab-content">
+             <!-- Nội dung Process -->
+        </section>
+
+        <section id="tab-terminal" class="tab-content">
+             <!-- Nội dung Terminal -->
+        </section>
+      </main>
+    </div>
+
+    <!-- UI COMPONENTS: MODALS & TOASTS -->
+    <div id="toast-container" class="toast-container"></div>
+    <!-- (App Library Modal code here...) -->
+
+    <!-- JAVASCRIPT: MODULE ENTRY POINT -->
+    <!-- Quan trọng: type="module" cho phép dùng import/export -->
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
