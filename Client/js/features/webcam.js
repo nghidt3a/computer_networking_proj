@@ -8,17 +8,38 @@ export const WebcamFeature = {
 
         // UI Events
         document.getElementById('btn-webcam-start')?.addEventListener('click', () => SocketService.send('START_WEBCAM'));
-        document.getElementById('btn-webcam-stop')?.addEventListener('click', () => SocketService.send('STOP_WEBCAM'));
+        document.getElementById('btn-webcam-stop')?.addEventListener('click', () => {
+            SocketService.send('STOP_WEBCAM');
+            this.resetWebcam();
+        });
         document.getElementById('btn-webcam-record')?.addEventListener('click', this.startRecording);
     },
 
-    handleWebcamFrame(packet) {
+    // Reset webcam về trạng thái ban đầu
+    resetWebcam() {
         const camImg = document.getElementById("webcam-feed");
         const placeholder = document.getElementById("webcam-placeholder");
         const statusBadge = document.getElementById("cam-status");
 
         if(camImg) {
-            camImg.src = "data:image/jpeg;base64," + packet.payload;
+            camImg.style.display = "none";
+            camImg.src = "";
+        }
+        if(placeholder) placeholder.style.display = "flex";
+        if(statusBadge) {
+            statusBadge.className = "badge bg-secondary";
+            statusBadge.innerText = "OFFLINE";
+        }
+    },
+
+    handleWebcamFrame(data) {
+        const payload = data.payload || data;
+        const camImg = document.getElementById("webcam-feed");
+        const placeholder = document.getElementById("webcam-placeholder");
+        const statusBadge = document.getElementById("cam-status");
+
+        if(camImg) {
+            camImg.src = "data:image/jpeg;base64," + payload;
             camImg.style.display = "block";
         }
         if(placeholder) placeholder.style.display = "none";
@@ -36,9 +57,10 @@ export const WebcamFeature = {
         UIManager.showToast(`Đang ghi hình ${duration}s...`, "info");
     },
 
-    handleVideoDownload(packet) {
+    handleVideoDownload(data) {
+        const payload = data.payload || data;
         // Chuyển đổi Base64 sang Binary Blob để tải video
-        const binaryString = window.atob(packet.payload);
+        const binaryString = window.atob(payload);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
         for (let i = 0; i < len; i++) {

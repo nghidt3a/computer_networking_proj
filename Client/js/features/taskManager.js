@@ -5,8 +5,12 @@ let currentMode = "apps"; // apps | processes
 
 export const TaskManagerFeature = {
     init() {
-        SocketService.on('APP_LIST', (list) => { if(currentMode === "apps") this.render(list); });
-        SocketService.on('PROCESS_LIST', (list) => { if(currentMode === "processes") this.render(list); });
+        SocketService.on('APP_LIST', (data) => { 
+            if(currentMode === "apps") this.render(data.payload || data); 
+        });
+        SocketService.on('PROCESS_LIST', (data) => { 
+            if(currentMode === "processes") this.render(data.payload || data); 
+        });
 
         document.getElementById('btn-get-apps')?.addEventListener('click', () => {
             currentMode = "apps";

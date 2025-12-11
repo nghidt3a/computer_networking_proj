@@ -37,7 +37,8 @@ export const FileManagerFeature = {
         if(label) label.innerText = path;
     },
 
-    renderFiles(items) {
+    renderFiles(data) {
+        const items = data.payload || data;
         if(items.error) return UIManager.showToast(items.error, "error");
 
         const tbody = document.getElementById("file-list-body");
@@ -108,7 +109,8 @@ export const FileManagerFeature = {
         });
     },
 
-    saveDownloadedFile(payload) {
+    saveDownloadedFile(packet) {
+        const payload = packet.payload || packet;
         const { fileName, data } = payload; // data là base64
         const link = document.createElement('a');
         link.href = 'data:application/octet-stream;base64,' + data;

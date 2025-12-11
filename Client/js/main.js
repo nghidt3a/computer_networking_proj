@@ -14,6 +14,10 @@ import { WebcamFeature } from './features/webcam.js';
 import { KeyloggerFeature } from './features/keylogger.js';
 import { FileManagerFeature } from './features/fileManager.js';
 import { TaskManagerFeature } from './features/taskManager.js';
+
+// Import Global Bridge để HTML onclick hoạt động
+import './utils/globalBridge.js';
+
 // --- INITIALIZATION ---
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -23,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
 
     // 2. Setup Login Event
+    AuthFeature.init();
    
     DashboardFeature.init();
     MonitorFeature.init();

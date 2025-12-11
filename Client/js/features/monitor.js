@@ -16,8 +16,31 @@ export const MonitorFeature = {
         const btnCapture = document.querySelector('#tab-monitor button[data-action="capture"]');
 
         if(btnStart) btnStart.onclick = () => SocketService.send('START_STREAM');
-        if(btnStop) btnStop.onclick = () => SocketService.send('STOP_STREAM');
+        if(btnStop) btnStop.onclick = () => {
+            SocketService.send('STOP_STREAM');
+            this.resetScreen();
+        };
         if(btnCapture) btnCapture.onclick = () => SocketService.send('CAPTURE_SCREEN');
+    },
+
+    // Reset màn hình về trạng thái ban đầu
+    resetScreen() {
+        const img = document.getElementById("live-screen");
+        const placeholder = document.getElementById("screen-placeholder");
+        const status = document.getElementById("monitorStatus");
+
+        if(img) {
+            img.style.display = "none";
+            img.src = "";
+        }
+        if(placeholder) placeholder.style.display = "flex";
+        if(status) status.innerText = "Ready";
+        
+        // Giải phóng bộ nhớ
+        if(objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+            objectUrl = null;
+        }
     },
 
     // Xử lý luồng Stream (Binary ArrayBuffer)
@@ -39,8 +62,9 @@ export const MonitorFeature = {
     },
 
     // Xử lý ảnh xem trước (Base64)
-    handleSnapshotPreview(packet) {
-        const imgSrc = "data:image/jpeg;base64," + packet.payload;
+    handleSnapshotPreview(data) {
+        const payload = data.payload || data;
+        const imgSrc = "data:image/jpeg;base64," + payload;
         const previewImg = document.getElementById("captured-preview");
         const saveBadge = document.getElementById("save-badge");
         const previewText = document.getElementById("preview-text");
@@ -54,9 +78,10 @@ export const MonitorFeature = {
     },
 
     // Xử lý tải ảnh gốc về máy
-    handleSnapshotDownload(packet) {
+    handleSnapshotDownload(data) {
+        const payload = data.payload || data;
         const link = document.createElement('a');
-        link.href = 'data:image/jpeg;base64,' + packet.payload;
+        link.href = 'data:image/jpeg;base64,' + payload;
         const time = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
         link.download = `Screenshot_${time}.jpg`;
         document.body.appendChild(link);
