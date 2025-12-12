@@ -17,9 +17,9 @@ body {
 /* --- SIDEBAR --- */
 #sidebar {
     width: var(--sidebar-width);
-    min-width: var(--sidebar-width); /* Không bị co lại */
-    background-color: var(--bg-panel);
-    border-right: 1px solid #e5e7eb;
+    min-width: var(--sidebar-width);
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border-color);
     position: fixed;
     left: 0;
     top: 0;
@@ -27,6 +27,9 @@ body {
     z-index: 1000;
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: all 0.3s ease;
 }
 
 .sidebar-heading {
@@ -35,12 +38,16 @@ body {
     font-weight: 800;
     color: var(--primary-color);
     text-align: center;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid var(--border-color);
     height: var(--header-height);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 10px;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 /* Sidebar Navigation Items */
@@ -73,10 +80,13 @@ body {
 
 /* --- MAIN CONTENT AREA --- */
 #page-content {
-    width: 100%;
-    margin-left: var(--sidebar-width); /* Chừa chỗ cho Sidebar */
+    width: calc(100% - var(--sidebar-width));
+    max-width: 100%;
+    margin-left: var(--sidebar-width);
+    transition: all 0.3s ease;
     padding: 30px;
     flex-grow: 1;
+    overflow-x: hidden;
 }
 
 /* Tab Content Logic */
@@ -94,6 +104,49 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* --- COLLAPSIBLE SIDEBAR (TOGGLED STATE) --- */
+#app-wrapper.toggled #sidebar {
+    width: 4.5rem;
+    min-width: 4.5rem;
+}
+
+#app-wrapper.toggled #page-content {
+    margin-left: 4.5rem;
+    width: calc(100% - 4.5rem);
+}
+
+#app-wrapper.toggled .sidebar-heading {
+    font-size: 1.5rem;
+    padding: 1rem;
+}
+
+#app-wrapper.toggled .sidebar-heading i {
+    margin: 0;
+}
+
+#app-wrapper.toggled .sidebar-heading span {
+    display: none;
+}
+
+#app-wrapper.toggled .list-group-item {
+    padding: 16px 12px;
+    justify-content: center;
+    gap: 0;
+}
+
+#app-wrapper.toggled .list-group-item span {
+    display: none;
+}
+
+#app-wrapper.toggled .list-group-item i {
+    font-size: 1.25rem;
+}
+
+#app-wrapper.toggled .list-group-item.active {
+    border-right: 3px solid var(--primary-color);
+}
+
+/* --- 
 /* --- UTILITIES --- */
 .disabled-ui {
     pointer-events: none;
@@ -104,4 +157,38 @@ body {
 
 .hidden {
     display: none !important;
+}
+
+/* --- RESPONSIVE DESIGN --- */
+@media (max-width: 1024px) {
+    #sidebar {
+        transform: translateX(-100%);
+    }
+    
+    #sidebar.active {
+        transform: translateX(0);
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    #page-content {
+        margin-left: 0;
+        width: 100%;
+        padding: 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    #page-content {
+        padding: 16px;
+    }
+    
+    .sidebar-heading {
+        font-size: 1.1rem;
+        padding: 1rem;
+    }
+    
+    .list-group-item {
+        padding: 12px 20px;
+        font-size: 0.95rem;
+    }
 }

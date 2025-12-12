@@ -26,7 +26,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. Setup UI Events (Tabs, Sidebar clicks)
     setupNavigation();
 
-    // 2. Setup Login Event
+    // 2. Setup Theme Toggle
+    setupThemeToggle();
+
+    // 2.5 Setup Menu Toggle (Sidebar Collapse)
+    setupMenuToggle();
+
+    // 2.6 Setup Logo Click to return to Dashboard
+    setupLogoClick();
+
+    // 3. Setup Login Event
     AuthFeature.init();
    
     DashboardFeature.init();
@@ -36,9 +45,32 @@ document.addEventListener('DOMContentLoaded', () => {
     FileManagerFeature.init();
     TaskManagerFeature.init();
 });
+function setupMenuToggle() {
+    const menuToggle = document.getElementById('menu-toggle');
+    const appWrapper = document.getElementById('app-wrapper');
+    
+    if (menuToggle && appWrapper) {
+        menuToggle.addEventListener('click', () => {
+            appWrapper.classList.toggle('toggled');
+        });
+    }
+}
 
 // --- EVENT HANDLERS ---
 
+
+function setupLogoClick() {
+    const logo = document.getElementById('logo-heading');
+    if (logo) {
+        logo.addEventListener('click', () => {
+            // Quay về Dashboard bằng cách trigger click vào nút Dashboard
+            const dashboardBtn = document.querySelector('[data-tab="dashboard"]');
+            if (dashboardBtn) {
+                dashboardBtn.click();
+            }
+        });
+    }
+}
 
 function setupNavigation() {
     const navButtons = document.querySelectorAll('#sidebar .list-group-item');
@@ -74,4 +106,58 @@ function setupNavigation() {
         SocketService.disconnect();
         UIManager.showLoginScreen();
     });
+}
+
+// --- THEME TOGGLE SYSTEM ---
+/**
+ * Setup Dark Mode Toggle
+ * Lưu preference vào localStorage để giữ theme sau khi reload
+ */
+function setupThemeToggle() {
+    // Load saved theme từ localStorage
+    const savedTheme = localStorage.getItem('rcs-theme') || 'light';
+    applyTheme(savedTheme);
+
+    // Bắt sự kiện click nút toggle (nút này bạn sẽ thêm vào HTML)
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            applyTheme(newTheme);
+            localStorage.setItem('rcs-theme', newTheme);
+        });
+    }
+}
+
+/**
+ * Áp dụng theme lên HTML root element
+ * @param {string} theme - 'light' hoặc 'dark'
+ */
+function applyTheme(theme) {
+    if (theme === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        updateThemeIcon('dark');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        updateThemeIcon('light');
+    }
+}
+
+/**
+ * Cập nhật icon của nút toggle (nếu có)
+ * @param {string} theme - Theme hiện tại
+ */
+function updateThemeIcon(theme) {
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    if (!themeToggleBtn) return;
+
+    const icon = themeToggleBtn.querySelector('i');
+    if (icon) {
+        if (theme === 'dark') {
+            icon.className = 'fas fa-sun'; // Icon mặt trời khi đang Dark Mode
+        } else {
+            icon.className = 'fas fa-moon'; // Icon mặt trăng khi đang Light Mode
+        }
+    }
 }

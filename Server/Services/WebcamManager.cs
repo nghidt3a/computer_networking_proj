@@ -13,6 +13,7 @@ namespace RemoteControlServer.Services
         private static VideoWriter _writer;
         private static bool _isRecording = false;
         private static Thread _cameraThread;
+        private static bool _isCancelledRecording = false;
         
         // Biến lưu thông tin ghi hình
         private static DateTime _stopRecordTime;
@@ -51,6 +52,7 @@ namespace RemoteControlServer.Services
 
             try
             {
+                _isCancelledRecording = false;
                 // 1. Lưu vào thư mục Temp của hệ thống để tránh lỗi quyền truy cập
                 string tempFolder = Path.GetTempPath(); 
                 string fileName = $"Rec_{DateTime.Now:HHmmss}.avi";
@@ -80,12 +82,46 @@ namespace RemoteControlServer.Services
             {
                 _writer.Release();
                 _writer = null;
-                
-                Console.WriteLine($">> Đã tạo file tạm: {_currentSavePath}");
-                
-                // --- QUAN TRỌNG: Bắn sự kiện báo cho ServerCore biết để gửi file ---
-                OnVideoSaved?.Invoke(_currentSavePath);
+
+                if (_isCancelledRecording)
+                {
+                    // Bị hủy: xóa file và KHÔNG gửi sự kiện
+                    if (!string.IsNullOrEmpty(_currentSavePath) && File.Exists(_currentSavePath))
+                    {
+                        try { File.Delete(_currentSavePath); } catch { }
+                    }
+                    _currentSavePath = null;
+                }
+                else
+                {
+                    Console.WriteLine($">> Đã tạo file tạm: {_currentSavePath}");
+                    // --- Bắn sự kiện báo cho ServerCore biết để gửi file ---
+                    OnVideoSaved?.Invoke(_currentSavePath);
+                }
             }
+        }
+
+        // Public: Cancel current recording without saving
+        public static void CancelRecording()
+        {
+            if (!_isRecording && _writer == null) return;
+            _isCancelledRecording = true;
+            _isRecording = false;
+            try
+            {
+                if (_writer != null)
+                {
+                    _writer.Release();
+                    _writer = null;
+                }
+                // Delete temp file if created
+                if (!string.IsNullOrEmpty(_currentSavePath) && File.Exists(_currentSavePath))
+                {
+                    try { File.Delete(_currentSavePath); } catch { }
+                }
+                _currentSavePath = null;
+            }
+            catch { }
         }
 
         private static void CameraLoop()
@@ -124,7 +160,7 @@ namespace RemoteControlServer.Services
                             if (_writer.IsOpened()) _writer.Write(frame);
 
                             // Kiểm tra thời gian dừng
-                            if (DateTime.Now >= _stopRecordTime) StopRecording();
+                            if (!_isCancelledRecording && DateTime.Now >= _stopRecordTime) StopRecording();
                         }
 
                         // --- PHẦN STREAM (Gửi ảnh xem live) ---
