@@ -15,14 +15,17 @@ namespace RemoteControlServer.Core
 {
     public class ServerCore
     {
-        private static List<IWebSocketConnection> allSockets = new List<IWebSocketConnection>();
-        private static bool isStreaming = false;
-        private const string SERVER_PASSWORD = "123";
+        // ServerCore: Trung tâm xử lý phía Server
+        // - Khởi tạo WebSocket Server
+        // - Xử lý các lệnh từ Client (AUTH, FILE/PROCESS, STREAM...)
+        // - Phát broadcast Stream và Log
+        // All comments below in Vietnamese for clarity.
+        // Gộp trách nhiệm mạng vào SocketManager
+        // Lưu mật khẩu OTP tạm thời cho phiên (mỗi lần start sẽ random một mật khẩu)
+        private static string _sessionPassword = "";
 
-        private static readonly object _socketLock = new object();
-        private static byte[] _lastFrame = null;
-
-        private static object GetCurrentApps()
+        // Lấy danh sách các ứng dụng đang chạy (có cửa sổ hiển thị)
+        internal static object GetCurrentApps()
         {
             // Lấy danh sách các ứng dụng có cửa sổ (Window)
             return Process.GetProcesses()
@@ -31,7 +34,8 @@ namespace RemoteControlServer.Core
                 .ToList();
         }
 
-        private static object GetCurrentProcesses()
+        // Lấy danh sách tất cả tiến trình hiện tại
+        internal static object GetCurrentProcesses()
         {
             // Lấy danh sách toàn bộ tiến trình
             return Process.GetProcesses()
@@ -45,7 +49,8 @@ namespace RemoteControlServer.Core
         }
 
         // 1. Thêm hàm lấy danh sách Shortcut trong Start Menu
-        private static object GetInstalledApps()
+        // Lấy danh sách shortcut (ứng dụng) trong Start Menu của Windows
+        internal static object GetInstalledApps()
         {
             var apps = new List<object>();
             try
@@ -61,7 +66,6 @@ namespace RemoteControlServer.Core
                 {
                     string fileName = Path.GetFileNameWithoutExtension(file);
                     
-                    // Lọc bớt các file không cần thiết (Help, Uninstall...)
                     if (!fileName.ToLower().Contains("uninstall") && 
                         !fileName.ToLower().Contains("help") && 
                         !fileName.ToLower().Contains("readme"))
@@ -74,36 +78,46 @@ namespace RemoteControlServer.Core
             return apps.OrderBy(x => ((dynamic)x).name).ToList();
         }
 
+        // Bắt đầu khởi tạo WebSocket Server, đăng ký sự kiện và thread stream
         public static void Start(string url)
         {
+            SystemHelper.InitCounters();
+            _sessionPassword = new Random().Next(100000, 999999).ToString();
+
+            // In ra Console thật nổi bật
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("=================================================");
+            Console.WriteLine($"   REMOTE CONTROL SERVER IS RUNNING");
+            Console.WriteLine($"   URL: {url}");
+            Console.WriteLine($"   >> YOUR OTP PASSWORD: {_sessionPassword} <<");
+            Console.WriteLine("=================================================");
+            Console.ResetColor();
+
             var server = new WebSocketServer(url);
             server.Start(socket =>
             {
                 socket.OnOpen = () =>
                 {
                     Console.WriteLine(">> Client kết nối!");
-                    allSockets.Add(socket);
+                    SocketManager.Add(socket);
                 };
                 socket.OnClose = () =>
                 {
                     Console.WriteLine(">> Client ngắt kết nối!");
-                    allSockets.Remove(socket);
-                    if (allSockets.Count == 0) isStreaming = false;
+                    SocketManager.Remove(socket);
+                    if (SocketManager.All.Count == 0) StreamManager.StopStreaming();
                 };
                 socket.OnMessage = message => HandleClientCommand(socket, message);
             });
 
             Console.WriteLine($">> Server đang chạy tại {url}");
 
-            // 1. Xử lý Stream ảnh (Giữ nguyên)
+            // 1. Xử lý Stream ảnh\
             WebcamManager.OnFrameCaptured += (imgBytes) => {
-                if (allSockets.Count > 0) {
-                    string base64 = Convert.ToBase64String(imgBytes);
-                    BroadcastJson("WEBCAM_FRAME", base64);
-                }
+                SocketManager.BroadcastBinary(0x02, imgBytes);
             };
 
-            // 2. [MỚI] Xử lý Gửi File Video (Giống ý tưởng server.cs)
+            // 2. Xử lý Gửi File Video
             WebcamManager.OnVideoSaved += (filePath) => {
                 Task.Run(() => {
                     try 
@@ -117,9 +131,8 @@ namespace RemoteControlServer.Core
                             string base64File = Convert.ToBase64String(fileBytes);
                             
                             // Gửi gói tin đặc biệt chứa dữ liệu file
-                            BroadcastJson("VIDEO_FILE", base64File);
-                            
-                            BroadcastLog($"Đã gửi file video ({fileBytes.Length / 1024} KB) về máy bạn!");
+                            SocketManager.BroadcastJson("VIDEO_FILE", base64File);
+                            SocketManager.BroadcastJson("LOG", $"Đã gửi file video ({fileBytes.Length / 1024} KB) về máy bạn!");
 
                             // Xóa file tạm sau khi gửi xong (Dọn dẹp chiến trường)
                             File.Delete(filePath);
@@ -127,51 +140,37 @@ namespace RemoteControlServer.Core
                     }
                     catch (Exception ex)
                     {
-                        BroadcastLog("Lỗi gửi file: " + ex.Message);
+                        SocketManager.BroadcastJson("LOG", "Lỗi gửi file: " + ex.Message);
                     }
                 });
             };
 
-            Task.Run(() => ScreenStreamLoop());
+            // Khởi chạy vòng lặp gửi Stream ở lớp StreamManager
+            StreamManager.StartScreenLoop();
         }
 
-public static void BroadcastLog(string message)
-        {
-            BroadcastJson("LOG", message);
-        }
+        #region Command Handlers (Hàm xử lý các lệnh từ client)
 
-        // Hàm gửi an toàn (Có khóa lock)
-        private static void SafeSend(IWebSocketConnection socket, string message)
+        // Xử lý xác thực (AUTH)
+        private static void HandleAuth(IWebSocketConnection socket, WebPacket packet)
         {
-            lock (_socketLock) // Chỉ cho phép 1 luồng gửi tại 1 thời điểm
+            if (packet.payload == _sessionPassword)
             {
-                if (socket.IsAvailable) socket.Send(message);
+                SocketManager.SendJson(socket, "AUTH_RESULT", "OK");
+                Console.WriteLine("-> Client đăng nhập thành công!");
+            }
+            else
+            {
+                SocketManager.SendJson(socket, "AUTH_RESULT", "FAIL");
+                Console.WriteLine("-> Client sai mật khẩu!");
             }
         }
 
-        private static void SafeSend(IWebSocketConnection socket, byte[] data)
-        {
-            lock (_socketLock)
-            {
-                if (socket.IsAvailable) socket.Send(data);
-            }
-        }
+        // Các hàm xử lý khác (đổi tên, xóa, upload) đã được tách sang CommandHandler.cs
 
-        private static void BroadcastJson(string type, object payload)
-        {
-            var json = JsonConvert.SerializeObject(new { type = type, payload = payload });
-            foreach (var socket in allSockets.ToList()) 
-            {
-                SafeSend(socket, json); // Dùng hàm gửi an toàn
-            }
-        }
+        #endregion
 
-        private static void SendJson(IWebSocketConnection socket, string type, object payload)
-        {
-            var json = JsonConvert.SerializeObject(new { type = type, payload = payload });
-            SafeSend(socket, json); // Dùng hàm gửi an toàn
-        }
-
+        // Xử lý mọi gói lệnh từ client (AUTH, COMMANDS...)
         private static void HandleClientCommand(IWebSocketConnection socket, string jsonMessage)
         {
             try
@@ -179,253 +178,19 @@ public static void BroadcastLog(string message)
                 var packet = JsonConvert.DeserializeObject<WebPacket>(jsonMessage);
 
                 // 1. Auth
-                if (packet.type == "AUTH")
+                if (packet?.type == "AUTH")
                 {
-                    if (packet.payload == SERVER_PASSWORD)
-                    {
-                        SendJson(socket, "AUTH_RESULT", "OK");
-                        Console.WriteLine("-> Login OK");
-                    }
-                    else SendJson(socket, "AUTH_RESULT", "FAIL");
+                    HandleAuth(socket, packet);
                     return;
                 }
 
-                // 2. Command Processing
-                if (!string.IsNullOrEmpty(packet.command))
+                // 2. Delegate bất kỳ command nào cho CommandRouter
+                if (!string.IsNullOrEmpty(packet?.command))
                 {
-                    Console.WriteLine($"[CMD]: {packet.command} | {packet.param}");
-                    switch (packet.command)
-                    {
-                        case "START_STREAM":
-                            isStreaming = true;
-                            SendJson(socket, "LOG", "Đã bắt đầu Stream Video");
-                            break;
-                        case "STOP_STREAM":
-                            isStreaming = false;
-                            SendJson(socket, "LOG", "Đã dừng Stream");
-                            break;
-                        case "CAPTURE_SCREEN":
-                            try
-                            {
-                                // 1. Chụp ảnh GỐC (Chất lượng 90%, Tỉ lệ 1.0 = Full Size)
-                                // Lưu ý: Dữ liệu này chỉ nằm trên RAM (biến imgBytes), không lưu vào ổ cứng Server
-                                var imgBytes = SystemHelper.GetScreenShot(90L, 1.0);
-
-                                if (imgBytes != null)
-                                {
-                                    Console.WriteLine($">> Đã chụp màn hình ({imgBytes.Length / 1024} KB). Đang gửi...");
-
-                                    // 2. Chuyển đổi sang Base64 để gửi qua mạng
-                                    string base64Full = Convert.ToBase64String(imgBytes);
-
-                                    // 3. Gửi gói tin chứa ẢNH GỐC để Client tải về
-                                    SendJson(socket, "SCREENSHOT_FILE", base64Full);
-
-                                    // 4. (Tùy chọn) Tạo thêm ảnh nhỏ (Thumbnail) để hiển thị xem trước trên Web cho nhanh
-                                    var previewBytes = SystemHelper.GetScreenShot(50L, 0.3); 
-                                    if (previewBytes != null)
-                                    {
-                                        SendJson(socket, "SCREEN_CAPTURE", Convert.ToBase64String(previewBytes));
-                                    }
-                                    
-                                    SendJson(socket, "LOG", "Đã gửi ảnh chụp về máy bạn!");
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                SendJson(socket, "LOG", "Lỗi chụp ảnh: " + ex.Message);
-                            }
-                            break;
-                        case "GET_APPS":
-                            SendJson(socket, "APP_LIST", GetCurrentApps());
-                            break;
-                        case "GET_PROCESS":
-                            SendJson(socket, "PROCESS_LIST", GetCurrentProcesses());
-                            break;
-                       case "KILL":
-                            try 
-                            {
-                                int pid = int.Parse(packet.param);
-                                var proc = Process.GetProcessById(pid);
-                                proc.Kill(); // Thực hiện tắt ứng dụng
-                                
-                                SendJson(socket, "LOG", $"Đã diệt ID {pid}"); // Báo riêng cho người bấm
-
-                                // Gửi danh sách MỚI NHẤT cho TẤT CẢ Client ngay lập tức
-                                // Client nhận được gói tin này sẽ tự động vẽ lại bảng
-                                BroadcastJson("APP_LIST", GetCurrentApps());
-                                BroadcastJson("PROCESS_LIST", GetCurrentProcesses());
-                            } 
-                            catch (Exception ex) 
-                            { 
-                                SendJson(socket, "LOG", "Lỗi Kill: " + ex.Message); 
-                            }
-                            break;
-                        // [ServerCore.cs] - Trong hàm HandleClientCommand
-
-                        case "GET_INSTALLED":
-                            SendJson(socket, "INSTALLED_LIST", GetInstalledApps());
-                            break;
-
-                        case "START_APP":
-                            try 
-                            {
-                                string request = packet.param;
-                                string fileNameToRun = request;
-
-                                // [LOGIC THÔNG MINH] 
-                                // Nếu thấy có dấu chấm (.) mà không có khoảng trắng -> Tự hiểu là Web
-                                // Ví dụ: nhập "youtube.com" -> tự sửa thành "https://youtube.com"
-                                if (request.Contains(".") && !request.Contains(" ") && !request.StartsWith("http"))
-                                {
-                                    fileNameToRun = "https://" + request;
-                                }
-
-                                // Chạy lệnh (Windows tự tìm ứng dụng phù hợp: Web -> Chrome/Edge)
-                                Process.Start(new ProcessStartInfo { 
-                                    FileName = fileNameToRun, 
-                                    UseShellExecute = true 
-                                });
-
-                                SendJson(socket, "LOG", $"Đang mở: {fileNameToRun}...");
-                                
-                                // Cập nhật lại danh sách sau 2s để người dùng thấy trình duyệt hiện lên Task Manager
-                                Task.Run(() => {
-                                    Thread.Sleep(2000); 
-                                    BroadcastJson("APP_LIST", GetCurrentApps());
-                                });
-                            } 
-                            catch 
-                            { 
-                                SendJson(socket, "LOG", "Lỗi: Không thể mở yêu cầu này!"); 
-                            }
-                            break;
-                        case "SHUTDOWN": Process.Start("shutdown", "/s /t 5"); break;
-                        case "RESTART": Process.Start("shutdown", "/r /t 5"); break;
-                        case "START_WEBCAM":
-                            WebcamManager.StartWebcam();
-                            // Đăng ký sự kiện: Khi có ảnh Webcam -> Gửi cho Client này
-                            WebcamManager.OnFrameCaptured += (imgBytes) => {
-                                // Gửi dạng binary (giống màn hình) nhưng ta cần phân biệt
-                                // Ở đây để đơn giản, ta gửi dạng Base64 qua kênh JSON với type riêng
-                                string base64 = Convert.ToBase64String(imgBytes);
-                                SendJson(socket, "WEBCAM_FRAME", base64);
-                            };
-                            SendJson(socket, "LOG", "Đã bật Webcam Server");
-                            break;
-
-                        case "STOP_WEBCAM":
-                            WebcamManager.StopWebcam();
-                            SendJson(socket, "LOG", "Đã tắt Webcam");
-                            break;
-
-                        case "RECORD_WEBCAM":
-                            int seconds = 10; // Mặc định 10s
-                            int.TryParse(packet.param, out seconds);
-                            
-                            string result = WebcamManager.StartRecording(seconds);
-                            SendJson(socket, "LOG", result);
-                            break;
-                        case "CANCEL_RECORD":
-                            WebcamManager.CancelRecording();
-                            SendJson(socket, "LOG", "Đã hủy ghi hình.");
-                            break;
-
-                        case "START_KEYLOG":
-                            if (!KeyLoggerService.IsRunning)
-                            {
-                                // Chạy Keylogger và gửi kết quả về client
-                                KeyLoggerService.StartHook((key) => {
-                                    BroadcastLog($"[Keylogger] {key}");
-                                });
-                                SendJson(socket, "LOG", "Keylogger: Đã BẬT ghi phím.");
-                            }
-                            else
-                            {
-                                SendJson(socket, "LOG", "Keylogger đang chạy rồi!");
-                            }
-                            break;
-
-                        case "STOP_KEYLOG":
-                            if (KeyLoggerService.IsRunning)
-                            {
-                                KeyLoggerService.StopHook();
-                                SendJson(socket, "LOG", "Keylogger: Đã TẮT ghi phím.");
-                            }
-                            else
-                            {
-                                SendJson(socket, "LOG", "Keylogger chưa được bật.");
-                            }
-                            break;
-                        
-                        case "GET_DRIVES": // Lấy danh sách ổ đĩa
-                            SendJson(socket, "FILE_LIST", FileManagerService.GetDrives());
-                            break;
-
-                        case "GET_DIR": // Lấy nội dung thư mục
-                            SendJson(socket, "FILE_LIST", FileManagerService.GetDirectoryContent(packet.param));
-                            break;
-
-                        case "DOWNLOAD_FILE": // Tải file về
-                            string base64File = FileManagerService.GetFileContentBase64(packet.param);
-                            if (base64File == "ERROR_SIZE_LIMIT")
-                            {
-                                SendJson(socket, "LOG", "Lỗi: File quá lớn (>50MB) để tải qua Web!");
-                            }
-                            else if (base64File != null)
-                            {
-                                // Gửi gói tin đặc biệt chứa tên file và nội dung
-                                var payload = new { fileName = System.IO.Path.GetFileName(packet.param), data = base64File };
-                                SendJson(socket, "FILE_DOWNLOAD_DATA", payload);
-                                SendJson(socket, "LOG", "Đang tải xuống: " + System.IO.Path.GetFileName(packet.param));
-                            }
-                            else
-                            {
-                                SendJson(socket, "LOG", "Lỗi: Không đọc được file!");
-                            }
-                            break;
-
-                        case "DELETE_FILE": // Xóa file
-                            // Thêm ngoặc nhọn {} để tránh lỗi trùng tên biến result
-                            { 
-                                string deleteResult = FileManagerService.DeleteFile(packet.param);
-                                if (deleteResult == "OK")
-                                {
-                                    SendJson(socket, "LOG", "Đã xóa file thành công!");
-                                }
-                                else
-                                {
-                                    SendJson(socket, "LOG", deleteResult);
-                                }
-                                break;
-                            }
-                    }
+                    CommandRouter.ProcessCommand(socket, packet);
                 }
             }
             catch (Exception ex) { Console.WriteLine("Lỗi Handle: " + ex.Message); }
-        }
-
-        
-
-        private static void ScreenStreamLoop()
-        {
-            while (true)
-            {
-                if (isStreaming && allSockets.Count > 0)
-                {
-                    byte[] frame = SystemHelper.GetScreenShot(40L); // Chất lượng thấp để mượt
-                    if (frame != null)
-                    {
-                        foreach (var socket in allSockets.ToList())
-                            if (socket.IsAvailable) socket.Send(frame);
-                    }
-                    Thread.Sleep(60); // ~15 FPS
-                }
-                else
-                {
-                    Thread.Sleep(500);
-                }
-            }
         }
     }
 }

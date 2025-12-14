@@ -94,7 +94,7 @@ export const TelexEngine = {
             }
         }
 
-        return text + char;
+        return prefix + word + char;
     },
 
     // --- Helpers ---

@@ -8,6 +8,10 @@ let fitMode = 'contain'; // contain, cover, fill
 let isPanning = false;
 let startX, startY, scrollLeft, scrollTop;
 
+// Control variables
+let isControlEnabled = false;
+let lastMoveTime = 0;
+
 export const MonitorFeature = {
     init() {
         // 1. Đăng ký lắng nghe sự kiện từ Server
@@ -20,8 +24,12 @@ export const MonitorFeature = {
         const btnStop = document.querySelector('#tab-monitor button[data-action="stop"]');
         const btnCapture = document.querySelector('#tab-monitor button[data-action="capture"]');
 
-        if(btnStart) btnStart.onclick = () => SocketService.send('START_STREAM');
+        if(btnStart) btnStart.onclick = () => {
+            isStreaming = true; // cho phép nhận frame
+            SocketService.send('START_STREAM');
+        };
         if(btnStop) btnStop.onclick = () => {
+            isStreaming = false;
             SocketService.send('STOP_STREAM');
             this.resetScreen();
         };
@@ -29,6 +37,12 @@ export const MonitorFeature = {
         
         // Setup Pan & Drag for zoomed images
         this.setupPanControls();
+        
+        // Setup Control Toggle
+        this.setupControlToggle();
+        
+        // Setup Mouse and Keyboard Control
+        this.setupMouseControl();
     },
 
     // Toggle Monitor (Start/Stop)
@@ -77,30 +91,23 @@ export const MonitorFeature = {
         const placeholder = document.getElementById("screen-placeholder");
 
         if(img) {
-            img.style.display = "none";
-            img.style.visibility = "hidden";
-            img.style.opacity = "0";
-            img.src = "";
-            img.className = "";
-            img.removeAttribute('src');
-            console.log('✓ Image reset');
+            // Fade out first, then clear src after transition
+            img.classList.remove('visible');
+            setTimeout(() => {
+                img.src = "";
+                // Giải phóng bộ nhớ sau khi fade out
+                if(objectUrl) {
+                    URL.revokeObjectURL(objectUrl);
+                    objectUrl = null;
+                }
+            }, 350); // Match CSS transition duration
+                console.log('Image reset');
         }
         
         if(placeholder) {
-            placeholder.style.removeProperty('display');
-            placeholder.style.removeProperty('visibility');
-            placeholder.style.removeProperty('opacity');
-            placeholder.style.opacity = "1";
-            placeholder.style.display = "flex";
-            placeholder.style.visibility = "visible";
-            placeholder.classList.remove('hidden');
-            console.log('✓ Placeholder shown');
-        }
-        
-        // Giải phóng bộ nhớ
-        if(objectUrl) {
-            URL.revokeObjectURL(objectUrl);
-            objectUrl = null;
+            // Restore visibility by removing data-hidden attribute
+            placeholder.removeAttribute('data-hidden');
+                console.log('Placeholder shown');
         }
         
         // Reset zoom level
@@ -110,16 +117,21 @@ export const MonitorFeature = {
     },
 
     handleStreamFrame(arrayBuffer) {
-        // CHỈ xử lý frame khi đang streaming (tránh frame buffer sau khi stop)
-        if (!isStreaming) {
-            console.warn('❌ handleStreamFrame called but isStreaming=false, ignoring');
+        // Đọc header để phân loại frame (0x01 = monitor, 0x02 = webcam)
+        const view = new DataView(arrayBuffer);
+        const header = view.getUint8(0);
+        const blobData = arrayBuffer.slice(1); // bỏ byte header
+        
+        // Chỉ hiển thị màn hình khi đang stream và đúng header
+        if (!isStreaming || header !== 0x01) {
+            console.warn('❌ handleStreamFrame ignored (isStreaming=', isStreaming, ' header=', header, ')');
             return;
         }
         
-        console.log('✅ Received stream frame, size:', arrayBuffer.byteLength);
+        console.log('✅ Received stream frame, size:', blobData.byteLength);
         
         if (objectUrl) URL.revokeObjectURL(objectUrl);
-        const blob = new Blob([arrayBuffer], { type: "image/jpeg" });
+        const blob = new Blob([blobData], { type: "image/jpeg" });
         objectUrl = URL.createObjectURL(blob);
         
         const img = document.getElementById("live-screen");
@@ -129,11 +141,9 @@ export const MonitorFeature = {
 
         if(img) {
             img.src = objectUrl;
-            img.style.display = "block";
-            img.style.visibility = "visible";
-            img.style.opacity = "1";
-            img.style.zIndex = "10";
-            img.removeAttribute('hidden');
+            // Trigger reflow to allow transition
+            img.offsetHeight;
+            img.classList.add('visible');
             
             console.log('✓ Image displayed');
             
@@ -145,20 +155,9 @@ export const MonitorFeature = {
         }
         
         if(placeholder) {
-            // Clear all inline styles first
-            placeholder.style.removeProperty('display');
-            placeholder.style.removeProperty('visibility');
-            placeholder.style.removeProperty('opacity');
-            placeholder.style.removeProperty('pointer-events');
-            
-            // Then set to hidden with strong overrides
-            placeholder.style.display = "none";
-            placeholder.style.visibility = "hidden";
-            placeholder.style.opacity = "0";
-            placeholder.style.pointerEvents = "none";
-            
-            // Also add class as backup
+            // Use class-based approach for smooth fade
             placeholder.classList.add('hidden');
+            placeholder.setAttribute('data-hidden', 'true');
             
             console.log('✓ Placeholder hidden');
         } else {
@@ -331,5 +330,103 @@ export const MonitorFeature = {
             container.scrollLeft = scrollLeft - walkX;
             container.scrollTop = scrollTop - walkY;
         });
+    },
+
+    // NEW: Setup Control Toggle
+    setupControlToggle() {
+        const checkbox = document.getElementById('control-toggle');
+        if (checkbox) {
+            checkbox.addEventListener('change', (e) => {
+                this.toggleControl(e.target.checked);
+            });
+        }
+    },
+
+    // NEW: Toggle Remote Control
+    toggleControl(enabled) {
+        isControlEnabled = enabled;
+        const screenImg = document.getElementById('live-screen');
+        
+        if (isControlEnabled) {
+            UIManager.showToast('Đã BẬT chế độ điều khiển!', 'success');
+            if (screenImg) {
+                screenImg.style.cursor = 'crosshair';
+                screenImg.classList.add('control-active');
+            }
+            // Add keyboard event listener (use arrow function to preserve context)
+            this.keyHandler = (e) => this.handleRemoteKey(e);
+            document.addEventListener('keydown', this.keyHandler);
+        } else {
+            UIManager.showToast('Đã TẮT chế độ điều khiển!', 'info');
+            if (screenImg) {
+                screenImg.style.cursor = 'default';
+                screenImg.classList.remove('control-active');
+            }
+            // Remove keyboard event listener
+            if (this.keyHandler) {
+                document.removeEventListener('keydown', this.keyHandler);
+                this.keyHandler = null;
+            }
+        }
+    },
+
+    // NEW: Setup Mouse Control on Live Screen
+    setupMouseControl() {
+        const screenImg = document.getElementById('live-screen');
+        if (!screenImg) return;
+
+        // Mouse Move
+        screenImg.addEventListener('mousemove', (e) => {
+            if (!isControlEnabled) return;
+            
+            const now = Date.now();
+            if (now - lastMoveTime < 50) return; // Throttle to 20fps
+            lastMoveTime = now;
+            
+            const rect = screenImg.getBoundingClientRect();
+            let rawX = (e.clientX - rect.left) / rect.width;
+            let rawY = (e.clientY - rect.top) / rect.height;
+            
+            // Clamp values between 0 and 1
+            const xPercent = Math.max(0, Math.min(1, rawX));
+            const yPercent = Math.max(0, Math.min(1, rawY));
+            
+            SocketService.send('MOUSE_MOVE', JSON.stringify({ x: xPercent, y: yPercent }));
+        });
+
+        // Mouse Down
+        screenImg.addEventListener('mousedown', (e) => {
+            if (!isControlEnabled) return;
+            e.preventDefault();
+            
+            const btn = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle';
+            SocketService.send('MOUSE_CLICK', JSON.stringify({ btn: btn, action: 'down' }));
+        });
+
+        // Mouse Up
+        screenImg.addEventListener('mouseup', (e) => {
+            if (!isControlEnabled) return;
+            e.preventDefault();
+            
+            const btn = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle';
+            SocketService.send('MOUSE_CLICK', JSON.stringify({ btn: btn, action: 'up' }));
+        });
+
+        // Prevent Context Menu when controlling
+        screenImg.addEventListener('contextmenu', (e) => {
+            if (isControlEnabled) e.preventDefault();
+        });
+    },
+
+    // NEW: Handle Keyboard Input for Remote Control
+    handleRemoteKey(e) {
+        if (!isControlEnabled) return;
+        
+        SocketService.send('KEY_PRESS', e.key);
+        
+        // Prevent default browser behavior for certain keys
+        if (['F5', 'Tab', 'Alt', 'ContextMenu', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            e.preventDefault();
+        }
     }
 };

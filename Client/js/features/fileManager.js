@@ -12,6 +12,9 @@ export const FileManagerFeature = {
         // UI Events
         document.getElementById('btn-file-home')?.addEventListener('click', () => this.getDrives());
         
+        // Initialize breadcrumb home button
+        this.initBreadcrumbHome();
+        
         // Lazy load: Khi bấm vào tab Files lần đầu thì load ổ đĩa luôn
         const navFiles = document.getElementById('nav-files');
         if(navFiles) {
@@ -19,9 +22,28 @@ export const FileManagerFeature = {
             navFiles.addEventListener('click', () => {
                 if(!hasLoaded) {
                     hasLoaded = true;
-                    setTimeout(() => this.getDrives(), 100);
+                    setTimeout(() => {
+                        this.getDrives();
+                        // Re-initialize breadcrumb in case it wasn't loaded yet
+                        this.initBreadcrumbHome();
+                    }, 100);
                 }
             });
+        }
+    },
+
+    initBreadcrumbHome() {
+        // Initialize the static breadcrumb home button that's in HTML
+        const breadcrumbContainer = document.getElementById("file-breadcrumb");
+        if(breadcrumbContainer) {
+            const homeLink = breadcrumbContainer.querySelector('a');
+            if(homeLink && !homeLink.dataset.initialized) {
+                homeLink.dataset.initialized = 'true';
+                homeLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.getDrives();
+                });
+            }
         }
     },
 
@@ -32,9 +54,17 @@ export const FileManagerFeature = {
     },
 
     openFolder(path) {
-        currentPath = path;
-        this.updatePathLabel(path);
-        SocketService.send("GET_DIR", path);
+        // Normalize path - ensure drive letters have trailing backslash if just root
+        let normalizedPath = path;
+        if (normalizedPath && normalizedPath.match(/^[A-Za-z]:$/)) {
+            // If path is just "D:" add backslash to make it "D:\"
+            normalizedPath = normalizedPath + "\\";
+        }
+        
+        currentPath = normalizedPath;
+        this.updatePathLabel(normalizedPath);
+        console.log('Opening folder:', normalizedPath);
+        SocketService.send("GET_DIR", normalizedPath);
     },
 
     updatePathLabel(path) {
@@ -146,8 +176,7 @@ export const FileManagerFeature = {
                     e.stopPropagation();
                     const newName = prompt("Enter new name:", item.Name);
                     if(newName && newName !== item.Name) {
-                        UIManager.showToast("Rename function coming soon!", "info");
-                        // TODO: Implement rename on server
+                        FileManagerFeature.renameFile(item.Path, newName);
                     }
                 };
 
@@ -166,7 +195,19 @@ export const FileManagerFeature = {
 
                 tdAction.append(btnDown, btnRename, btnDel);
             } else if (item.Type === "FOLDER") {
-                // Folder actions - only delete
+                // Folder actions - rename and delete
+                const btnRename = document.createElement("button");
+                btnRename.className = "btn btn-sm btn-light me-1";
+                btnRename.title = "Rename Folder";
+                btnRename.innerHTML = '<i class="fas fa-edit text-secondary"></i>';
+                btnRename.onclick = (e) => {
+                    e.stopPropagation();
+                    const newName = prompt("Enter new folder name:", item.Name);
+                    if(newName && newName !== item.Name) {
+                        FileManagerFeature.renameFolder(item.Path, newName);
+                    }
+                };
+
                 const btnDel = document.createElement("button");
                 btnDel.className = "btn btn-sm btn-light";
                 btnDel.title = "Delete Folder";
@@ -174,11 +215,10 @@ export const FileManagerFeature = {
                 btnDel.onclick = (e) => {
                     e.stopPropagation();
                     if(confirm("Delete this folder and all its contents?")) {
-                        UIManager.showToast("Folder delete function coming soon!", "info");
-                        // TODO: Implement folder delete on server
+                        FileManagerFeature.deleteFolder(item.Path);
                     }
                 };
-                tdAction.appendChild(btnDel);
+                tdAction.append(btnRename, btnDel);
             }
 
             tr.append(tdIcon, tdName, tdModified, tdSize, tdAction);
@@ -199,16 +239,122 @@ export const FileManagerFeature = {
     },
 
     updateBreadcrumb(path) {
-        const breadcrumb = document.getElementById("current-path-breadcrumb");
-        if(!breadcrumb) return;
+        const breadcrumbContainer = document.getElementById("file-breadcrumb");
+        if(!breadcrumbContainer) return;
         
-        if(!path || path === "") {
-            breadcrumb.textContent = "";
-            breadcrumb.className = "breadcrumb-item active d-none";
-        } else {
-            breadcrumb.textContent = path;
-            breadcrumb.className = "breadcrumb-item active";
+        // Clear breadcrumb (keep only home)
+        breadcrumbContainer.innerHTML = `
+            <li class="breadcrumb-item">
+                <a href="#" class="text-primary text-decoration-none" style="cursor: pointer;">
+                    <i class="fas fa-home"></i> My Computer
+                </a>
+            </li>
+        `;
+        
+        // Add event listener for home button
+        const homeLink = breadcrumbContainer.querySelector('a');
+        if(homeLink) {
+            homeLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                FileManagerFeature.getDrives();
+            });
         }
+        
+        // If no path or empty, we're at root (showing drives)
+        if(!path || path === "") {
+            return;
+        }
+        
+        // Split path into parts
+        // Windows path format: C:\folder1\folder2\folder3
+        // Handle both "C:" and "C:\" formats - normalize for display
+        let normalizedPath = path;
+        
+        // Remove trailing backslash for non-root paths (e.g., "D:\folder\" -> "D:\folder")
+        // But keep it for root drives (e.g., "D:\" stays as "D:\")
+        if(normalizedPath.endsWith('\\') && normalizedPath.length > 3) {
+            normalizedPath = normalizedPath.slice(0, -1);
+        }
+        
+        const parts = normalizedPath.split('\\').filter(p => p);
+        
+        // If we only have drive letter, make sure it's displayed correctly
+        if(parts.length === 0) return;
+        
+        // Build clickable breadcrumb
+        let accumulatedPath = "";
+        parts.forEach((part, index) => {
+            const li = document.createElement("li");
+            
+            // Build path up to this part
+            if(index === 0) {
+                // Drive letter (e.g., "C:")
+                accumulatedPath = part;
+                // Ensure drive letter has proper format
+                if(!accumulatedPath.endsWith(':')) {
+                    accumulatedPath += ':';
+                }
+            } else {
+                accumulatedPath += "\\" + part;
+            }
+            
+            const pathToNavigate = accumulatedPath; // Capture for closure
+            
+            // Determine if this is the last item
+            const isLast = (index === parts.length - 1);
+            
+            // Special case: if we're at drive root and have only 1 part, make it clickable
+            // This allows refreshing the drive view
+            const isDriveRoot = (parts.length === 1 && index === 0);
+            const isDrive = (index === 0); // First element is always a drive
+            
+            if(isLast && !isDriveRoot) {
+                // Last item (not drive root) is active and not clickable
+                li.className = "breadcrumb-item active";
+                li.setAttribute("aria-current", "page");
+                
+                // Add icon for drives even when active
+                if(isDrive) {
+                    const icon = document.createElement("i");
+                    icon.className = "fas fa-hdd me-1";
+                    li.appendChild(icon);
+                }
+                
+                const textNode = document.createTextNode(part);
+                li.appendChild(textNode);
+            } else {
+                // Clickable items (including drive root)
+                li.className = "breadcrumb-item";
+                const link = document.createElement("a");
+                link.href = "#";
+                link.className = "text-primary text-decoration-none";
+                link.style.cursor = "pointer";
+                
+                // Add icon for drives
+                if(isDrive) {
+                    const icon = document.createElement("i");
+                    icon.className = "fas fa-hdd me-1";
+                    link.appendChild(icon);
+                }
+                
+                const textNode = document.createTextNode(part);
+                link.appendChild(textNode);
+                
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    console.log('Breadcrumb clicked:', pathToNavigate);
+                    try {
+                        FileManagerFeature.openFolder(pathToNavigate);
+                    } catch (error) {
+                        console.error('Error opening folder:', error);
+                        UIManager.showToast('Error navigating to folder', 'error');
+                    }
+                });
+                li.appendChild(link);
+            }
+            
+            breadcrumbContainer.appendChild(li);
+        });
     },
 
     saveDownloadedFile(packet) {
@@ -221,34 +367,76 @@ export const FileManagerFeature = {
         link.click();
         document.body.removeChild(link);
         UIManager.showToast(`Đã tải xuống: ${fileName}`, "success");
-    }
-};
+    },
 
-// Global functions for toolbar buttons (called from HTML)
-window.uploadFile = function() {
-    UIManager.showToast("Upload function coming soon!", "info");
-    // TODO: Implement file upload
-};
+    renameFile(filePath, newName) {
+        const payload = { path: filePath, newName: newName };
+        SocketService.send("RENAME_FILE", JSON.stringify(payload));
+        setTimeout(() => this.openFolder(currentPath), 500);
+    },
 
-window.createNewFolder = function() {
-    const folderName = prompt("Enter new folder name:");
-    if(folderName) {
-        UIManager.showToast("Create folder function coming soon!", "info");
-        // TODO: Implement create folder on server
-    }
-};
+    renameFolder(folderPath, newName) {
+        const payload = { path: folderPath, newName: newName };
+        SocketService.send("RENAME_FOLDER", JSON.stringify(payload));
+        setTimeout(() => this.openFolder(currentPath), 500);
+    },
 
-window.searchFiles = function() {
-    const searchInput = document.getElementById('file-search-input');
-    const searchTerm = searchInput?.value.toLowerCase() || "";
-    const tbody = document.getElementById("file-list-body");
-    const rows = tbody?.getElementsByTagName("tr") || [];
-    
-    for(let row of rows) {
-        const nameCell = row.cells[1]; // Name column
-        if(nameCell) {
-            const fileName = nameCell.textContent.toLowerCase();
-            row.style.display = fileName.includes(searchTerm) ? "" : "none";
+    deleteFolder(folderPath) {
+        SocketService.send("DELETE_FOLDER", folderPath);
+        setTimeout(() => {
+            if (!currentPath || currentPath === "") {
+                this.getDrives();
+            } else {
+                this.openFolder(currentPath);
+            }
+        }, 500);
+    },
+
+    createFolder() {
+        if (!currentPath || currentPath === "") {
+            UIManager.showToast("Please navigate to a folder first!", "warning");
+            return;
         }
+        
+        const folderName = prompt("Enter new folder name:");
+        if (folderName && folderName.trim() !== "") {
+            const payload = {
+                path: currentPath,
+                name: folderName.trim()
+            };
+            
+            SocketService.send("CREATE_FOLDER", JSON.stringify(payload));
+            UIManager.showToast(`Creating folder: ${folderName}...`, "info");
+            
+            // Refresh the current directory after a short delay
+            setTimeout(() => this.openFolder(currentPath), 800);
+        }
+    },
+
+    uploadFile(files) {
+        if (!files || files.length === 0) return;
+        
+        const file = files[0];
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+            const base64String = e.target.result.split(',')[1];
+            const payload = {
+                path: currentPath || "C:\\", // fallback to C: if no path selected
+                fileName: file.name,
+                data: base64String
+            };
+            
+            UIManager.showToast(`Uploading ${file.name}...`, "info");
+            SocketService.send("UPLOAD_FILE", JSON.stringify(payload));
+            
+            setTimeout(() => this.openFolder(currentPath || "C:\\"), 1000);
+        };
+        
+        reader.onerror = () => {
+            UIManager.showToast("Error reading file", "error");
+        };
+        
+        reader.readAsDataURL(file);
     }
 };

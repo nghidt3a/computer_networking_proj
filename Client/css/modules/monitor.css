@@ -42,11 +42,20 @@
     max-height: 100%;
     object-fit: contain;
     object-position: center center;
-    display: none;
     z-index: 10;
-    transition: transform 0.3s ease;
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                visibility 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.3s ease;
     user-select: none;
-    pointer-events: none;
+    pointer-events: auto; /* Changed from 'none' to 'auto' to enable mouse control */
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* Visible state */
+#live-screen.visible {
+    opacity: 1;
+    visibility: visible;
 }
 
 /* Zoom Levels */
@@ -76,15 +85,16 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                visibility 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Hidden state for placeholder */
-#screen-placeholder[style*="display: none"],
-#screen-placeholder.hidden {
-    display: none !important;
-    visibility: hidden !important;
+/* Hidden state for placeholder - smooth fade out */
+#screen-placeholder[data-hidden="true"] {
     opacity: 0 !important;
+    visibility: hidden !important;
     pointer-events: none !important;
 }
 
@@ -170,4 +180,27 @@
     max-width: 100%;
     cursor: zoom-in;
     border-radius: var(--radius-md);
+}
+
+/* Control Toggle Styling */
+#control-toggle {
+    width: 2.5rem;
+    height: 1.25rem;
+    border: 2px solid var(--border-color);
+    background-color: var(--bg-secondary);
+    transition: background-color 0.3s, border-color 0.3s;
+}
+
+#control-toggle:checked {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+#control-toggle:checked + label {
+    color: #0d6efd;
+}
+
+/* Crosshair cursor when control is enabled */
+#live-screen.control-active {
+    cursor: crosshair !important;
 }

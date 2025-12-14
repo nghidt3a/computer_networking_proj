@@ -7,7 +7,9 @@ namespace RemoteControlServer.Services
 {
     public static class FileManagerService
     {
-        // Struct đơn giản để trả về dữ liệu cho Client
+        /// <summary>
+        /// File item DTO returned to clients. Keep property names stable for JSON compatibility.
+        /// </summary>
         public class FileItem
         {
             public string Name { get; set; }
@@ -16,7 +18,7 @@ namespace RemoteControlServer.Services
             public string Size { get; set; }
         }
 
-        // 1. Lấy danh sách ổ đĩa (Gốc)
+        /// <summary>Returns the list of system drives.</summary>
         public static List<FileItem> GetDrives()
         {
             var list = new List<FileItem>();
@@ -36,6 +38,7 @@ namespace RemoteControlServer.Services
         }
 
         // 2. Lấy nội dung trong thư mục
+        /// <summary>Gets the directory listing (folders & files) for a specified path; returns an error object on exception.</summary>
         public static object GetDirectoryContent(string path)
         {
             var list = new List<FileItem>();
@@ -78,6 +81,7 @@ namespace RemoteControlServer.Services
         }
 
         // 3. Đọc file để tải về (Chuyển sang Base64)
+        /// <summary>Get file content as Base64. Returns "ERROR_SIZE_LIMIT" if file too large.</summary>
         public static string GetFileContentBase64(string path)
         {
             try
@@ -94,6 +98,7 @@ namespace RemoteControlServer.Services
         }
 
         // 4. Xóa file
+        /// <summary>Delete a file from filesystem and return 'OK' on success or an error message.</summary>
         public static string DeleteFile(string path)
         {
             try
@@ -109,6 +114,7 @@ namespace RemoteControlServer.Services
         }
 
         // Helper: Format dung lượng cho đẹp
+        /// <summary>Format byte length into human readable string, e.g., "1.23 MB".</summary>
         private static string FormatSize(long bytes)
         {
             string[] sizes = { "B", "KB", "MB", "GB", "TB" };
@@ -121,5 +127,117 @@ namespace RemoteControlServer.Services
             }
             return $"{len:0.##} {sizes[order]}";
         }
+
+        // 5. Lưu file từ Base64 (Upload)
+        /// <summary>Save a file from provided Base64 data into a target folder.</summary>
+        public static string SaveFileFromBase64(string folderPath, string fileName, string base64Data)
+        {
+            try
+            {
+                // Kiểm tra đường dẫn
+                if (!Directory.Exists(folderPath)) return "Thư mục không tồn tại!";
+
+                string fullPath = Path.Combine(folderPath, fileName);
+
+                // Chuyển Base64 -> Byte array
+                byte[] bytes = Convert.FromBase64String(base64Data);
+
+                // Ghi xuống ổ cứng
+                File.WriteAllBytes(fullPath, bytes);
+
+                return "OK";
+            }
+            catch (Exception ex)
+            {
+                return "Lỗi Upload: " + ex.Message;
+            }
+        }
+
+        // [THÊM MỚI] 6. Tạo thư mục mới
+        /// <summary>Create a new directory under a parent path, returning 'OK' or an error message.</summary>
+        public static string CreateDirectory(string parentPath, string folderName)
+        {
+            try
+            {
+                if (!Directory.Exists(parentPath)) return "Thư mục cha không tồn tại!";
+                
+                string fullPath = Path.Combine(parentPath, folderName);
+                
+                if (Directory.Exists(fullPath)) return "Thư mục này đã tồn tại!";
+                
+                Directory.CreateDirectory(fullPath);
+                return "OK";
+            }
+            catch (Exception ex)
+            {
+                return "Lỗi tạo folder: " + ex.Message;
+            }
+        }
+
+        // 7. Xóa thư mục (bao gồm cả nội dung)
+        /// <summary>Delete a directory and its contents; returns 'OK' on success.</summary>
+        public static string DeleteDirectory(string path)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, true); // xóa đệ quy
+                    return "OK";
+                }
+                return "Thư mục không tồn tại!";
+            }
+            catch (Exception ex)
+            {
+                return "Lỗi xóa thư mục: " + ex.Message;
+            }
+        }
+
+        // 8. Đổi tên file
+        /// <summary>Rename a file. Returns 'OK' or an error message.</summary>
+        public static string RenameFile(string filePath, string newName)
+        {
+            try
+            {
+                if (!File.Exists(filePath)) return "File không tồn tại!";
+
+                string dir = Path.GetDirectoryName(filePath);
+                if (string.IsNullOrEmpty(dir)) dir = ".";
+
+                string targetPath = Path.Combine(dir, newName);
+                if (File.Exists(targetPath)) return "Tên file mới đã tồn tại!";
+
+                File.Move(filePath, targetPath);
+                return "OK";
+            }
+            catch (Exception ex)
+            {
+                return "Lỗi đổi tên file: " + ex.Message;
+            }
+        }
+
+        // 9. Đổi tên thư mục
+        /// <summary>Rename a directory. Returns 'OK' or an error message.</summary>
+        public static string RenameDirectory(string dirPath, string newName)
+        {
+            try
+            {
+                if (!Directory.Exists(dirPath)) return "Thư mục không tồn tại!";
+
+                string parent = Path.GetDirectoryName(dirPath.TrimEnd(Path.DirectorySeparatorChar));
+                if (string.IsNullOrEmpty(parent)) parent = Path.GetPathRoot(dirPath);
+
+                string targetPath = Path.Combine(parent, newName);
+                if (Directory.Exists(targetPath)) return "Thư mục mới đã tồn tại!";
+
+                Directory.Move(dirPath, targetPath);
+                return "OK";
+            }
+            catch (Exception ex)
+            {
+                return "Lỗi đổi tên thư mục: " + ex.Message;
+            }
+        }
     }
 }
+

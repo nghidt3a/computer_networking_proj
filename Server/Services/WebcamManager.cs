@@ -6,6 +6,9 @@ using OpenCvSharp;
 
 namespace RemoteControlServer.Services
 {
+    /// <summary>
+    /// WebcamManager provides webcam capture, streaming, and recording.
+    /// </summary>
     public static class WebcamManager
     {
         private static VideoCapture _capture;
@@ -13,18 +16,17 @@ namespace RemoteControlServer.Services
         private static VideoWriter _writer;
         private static bool _isRecording = false;
         private static Thread _cameraThread;
-        private static bool _isCancelledRecording = false;
         
         // Biến lưu thông tin ghi hình
         private static DateTime _stopRecordTime;
         private static string _currentSavePath;
 
-        // Sự kiện: 
-        // 1. Gửi ảnh Stream (xem live)
-        // 2. Báo tin đã lưu file xong (để gửi qua socket)
+        /// <summary>Fires with JPEG bytes for live feed frames.</summary>
         public static event Action<byte[]> OnFrameCaptured;
+        /// <summary>Fires when a recorded video file is saved.</summary>
         public static event Action<string> OnVideoSaved; 
 
+        /// <summary>Begin capturing frames from the default webcam and route frames to <see cref="OnFrameCaptured"/>.</summary>
         public static void StartWebcam()
         {
             if (_isStreaming) return;
@@ -33,6 +35,7 @@ namespace RemoteControlServer.Services
             _cameraThread.Start();
         }
 
+        /// <summary>Stop webcam capture and release resources.</summary>
         public static void StopWebcam()
         {
             _isStreaming = false;
@@ -45,6 +48,7 @@ namespace RemoteControlServer.Services
             _writer = null;
         }
 
+        /// <summary>Start recording a video for a given duration (seconds). Returns a status message.</summary>
         public static string StartRecording(int durationSeconds)
         {
             if (!_isStreaming) return "Lỗi: Hãy bật Webcam trước!";
@@ -52,7 +56,6 @@ namespace RemoteControlServer.Services
 
             try
             {
-                _isCancelledRecording = false;
                 // 1. Lưu vào thư mục Temp của hệ thống để tránh lỗi quyền truy cập
                 string tempFolder = Path.GetTempPath(); 
                 string fileName = $"Rec_{DateTime.Now:HHmmss}.avi";
@@ -70,6 +73,7 @@ namespace RemoteControlServer.Services
             }
         }
 
+        /// <summary>Stop recording and raise the <see cref="OnVideoSaved"/> event when file completes.</summary>
         private static void StopRecording()
         {
             if (!_isRecording) return;
@@ -82,48 +86,15 @@ namespace RemoteControlServer.Services
             {
                 _writer.Release();
                 _writer = null;
-
-                if (_isCancelledRecording)
-                {
-                    // Bị hủy: xóa file và KHÔNG gửi sự kiện
-                    if (!string.IsNullOrEmpty(_currentSavePath) && File.Exists(_currentSavePath))
-                    {
-                        try { File.Delete(_currentSavePath); } catch { }
-                    }
-                    _currentSavePath = null;
-                }
-                else
-                {
-                    Console.WriteLine($">> Đã tạo file tạm: {_currentSavePath}");
-                    // --- Bắn sự kiện báo cho ServerCore biết để gửi file ---
-                    OnVideoSaved?.Invoke(_currentSavePath);
-                }
+                
+                Console.WriteLine($">> Đã tạo file tạm: {_currentSavePath}");
+                
+                // --- QUAN TRỌNG: Bắn sự kiện báo cho ServerCore biết để gửi file ---
+                OnVideoSaved?.Invoke(_currentSavePath);
             }
         }
 
-        // Public: Cancel current recording without saving
-        public static void CancelRecording()
-        {
-            if (!_isRecording && _writer == null) return;
-            _isCancelledRecording = true;
-            _isRecording = false;
-            try
-            {
-                if (_writer != null)
-                {
-                    _writer.Release();
-                    _writer = null;
-                }
-                // Delete temp file if created
-                if (!string.IsNullOrEmpty(_currentSavePath) && File.Exists(_currentSavePath))
-                {
-                    try { File.Delete(_currentSavePath); } catch { }
-                }
-                _currentSavePath = null;
-            }
-            catch { }
-        }
-
+        /// <summary>Main loop capturing frames from the webcam and emitting live frames/events.</summary>
         private static void CameraLoop()
         {
             try 
@@ -160,7 +131,7 @@ namespace RemoteControlServer.Services
                             if (_writer.IsOpened()) _writer.Write(frame);
 
                             // Kiểm tra thời gian dừng
-                            if (!_isCancelledRecording && DateTime.Now >= _stopRecordTime) StopRecording();
+                            if (DateTime.Now >= _stopRecordTime) StopRecording();
                         }
 
                         // --- PHẦN STREAM (Gửi ảnh xem live) ---

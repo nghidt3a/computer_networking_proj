@@ -329,6 +329,101 @@
     border-color: #dee2e6;
 }
 
+/* --- SYSTEM INFO DASHBOARD --- */
+.info-box {
+    padding: 12px 0;
+}
+
+.info-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.info-data {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1e293b;
+    word-break: break-word;
+}
+
+.stats-grid-wrapper {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.mini-stat-card {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.3s ease;
+}
+
+.mini-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.stat-icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.bg-blue-light { background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); }
+.bg-purple-light { background: linear-gradient(135deg, #e9d5ff 0%, #d8b4fe 100%); }
+.bg-green-light { background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); }
+.bg-orange-light { background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%); }
+
+.stat-icon-box i {
+    font-size: 1.5rem;
+}
+
+.text-purple { color: #9333ea; }
+
+.stat-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.stat-value-text {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #1e293b;
+    line-height: 1.2;
+}
+
+.stat-sub-text {
+    display: block;
+    font-size: 0.7rem;
+    color: #94a3b8;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
 /* --- RESPONSIVE --- */
 @media (max-width: 768px) {
     .toast-msg {
@@ -352,5 +447,26 @@
     .app-grid-container {
         grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
         gap: 8px;
+    }
+    
+    .stats-grid-wrapper {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    
+    .mini-stat-card {
+        padding: 12px;
+    }
+    
+    .info-box {
+        padding: 8px 0;
+    }
+    
+    .info-label {
+        font-size: 0.75rem;
+    }
+    
+    .info-data {
+        font-size: 0.85rem;
     }
 }

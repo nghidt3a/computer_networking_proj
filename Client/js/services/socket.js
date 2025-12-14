@@ -29,8 +29,13 @@ export const SocketService = {
                             const packet = JSON.parse(event.data);
                             // Nếu là gói tin AUTH_RESULT, xử lý promise connect
                             if (packet.type === "AUTH_RESULT") {
-                                if (packet.payload === "OK") resolve("Connected");
-                                else reject(new Error("Wrong Password"));
+                                if (packet.payload === "OK") {
+                                    resolve("Connected");
+                                    // Start performance monitoring after successful login
+                                    dispatch("AUTH_SUCCESS", packet);
+                                } else {
+                                    reject(new Error("Wrong Password"));
+                                }
                             }
                             // Phân phối gói tin cho các module khác
                             dispatch(packet.type, packet);
@@ -39,7 +44,10 @@ export const SocketService = {
                 };
 
                 socket.onerror = (e) => reject(new Error("Socket Error"));
-                socket.onclose = () => dispatch("DISCONNECT", null);
+                socket.onclose = () => {
+                    dispatch("DISCONNECT", null);
+                    socket = null;
+                };
 
             } catch (e) {
                 reject(e);
@@ -54,6 +62,7 @@ export const SocketService = {
     // Gửi lệnh đi (Các Feature sẽ gọi hàm này)
     send(command, param = "") {
         if (socket && socket.readyState === WebSocket.OPEN) {
+                console.log(`Sending command: ${command} with param: ${param}`);
             // Tự động detect nếu là AUTH type hay Command thường
             if (command === "AUTH") {
                 socket.send(JSON.stringify({ type: "AUTH", payload: param }));

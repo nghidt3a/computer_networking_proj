@@ -2,6 +2,7 @@ import { SocketService } from '../services/socket.js';
 import { UIManager } from '../utils/ui.js';
 
 let allInstalledApps = [];
+let perfInterval = null;
 
 export const DashboardFeature = {
     init() {
@@ -19,6 +20,26 @@ export const DashboardFeature = {
             } else if (text.includes('Đã')) {
                 UIManager.showToast(text, 'success');
             }
+        });
+        
+        // Listen for System Info
+        SocketService.on('SYS_INFO', (data) => {
+            this.updateSystemInfo(data.payload || data);
+        });
+        
+        // Listen for Performance Stats
+        SocketService.on('PERF_STATS', (data) => {
+            this.updatePerformanceStats(data.payload || data);
+        });
+        
+        // Start monitoring when authenticated
+        SocketService.on('AUTH_SUCCESS', () => {
+            this.startPerformanceMonitoring();
+        });
+        
+        // Stop monitoring when disconnected
+        SocketService.on('DISCONNECT', () => {
+            this.stopPerformanceMonitoring();
         });
 
         // Listen for filter event from global bridge
@@ -111,5 +132,71 @@ export const DashboardFeature = {
         div.textContent = `[${new Date().toLocaleTimeString()}] > ${text}`;
         term.appendChild(div);
         term.scrollTop = term.scrollHeight;
+    },
+    
+    updateSystemInfo(info) {
+        // Update static system information
+        if (document.getElementById('os-info')) {
+            document.getElementById('os-info').innerText = info.os || 'Windows';
+            document.getElementById('pc-name').innerText = info.pcName || 'Unknown';
+            document.getElementById('cpu-name').innerText = info.cpuName || 'Standard CPU';
+            document.getElementById('gpu-name').innerText = info.gpuName || 'Integrated Graphics';
+            document.getElementById('vram-val').innerText = info.vram || 'N/A';
+            document.getElementById('disk-name').innerText = info.totalDisk || 'N/A';
+        }
+    },
+    
+    updatePerformanceStats(perf) {
+        // Update CPU
+        const elCpuFreq = document.getElementById('disp-cpu-freq');
+        if (elCpuFreq) {
+            elCpuFreq.innerText = (perf.cpu || 0) + '% Load';
+        }
+        
+        const elCpuTemp = document.getElementById('disp-cpu-temp');
+        if (elCpuTemp) {
+            if (perf.cpuTemp) {
+                elCpuTemp.innerText = 'Temp: ' + perf.cpuTemp + '°C';
+                elCpuTemp.style.color = perf.cpuTemp > 80 ? '#ef4444' : '#94a3b8';
+            } else {
+                elCpuTemp.innerText = 'Temp: --';
+            }
+        }
+        
+        // Update RAM
+        const elRam = document.getElementById('disp-ram-usage');
+        if (elRam) {
+            elRam.innerText = (perf.ram || 0) + '% Used';
+        }
+        
+        // Update GPU
+        const elGpu = document.getElementById('disp-gpu-vram');
+        if (elGpu) {
+            elGpu.innerText = (perf.gpu || 0) + '% Load';
+        }
+        
+        // Update Disk
+        const elDisk = document.getElementById('disp-disk-free');
+        if (elDisk) {
+            elDisk.innerText = (perf.diskUsage || 0) + '% Used';
+        }
+    },
+    
+    startPerformanceMonitoring() {
+        // Request initial system info
+        SocketService.send('GET_SYS_INFO');
+        
+        // Start periodic performance updates
+        if (perfInterval) clearInterval(perfInterval);
+        perfInterval = setInterval(() => {
+            SocketService.send('GET_PERFORMANCE');
+        }, 2000); // Update every 2 seconds
+    },
+    
+    stopPerformanceMonitoring() {
+        if (perfInterval) {
+            clearInterval(perfInterval);
+            perfInterval = null;
+        }
     }
 };

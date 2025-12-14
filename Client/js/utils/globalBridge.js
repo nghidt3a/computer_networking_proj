@@ -76,21 +76,41 @@ window.openFolder = function(path) {
     }
 };
 
-window.reqDownloadFile = function(path) {
-    if(confirm("Download this file?")) {
-        SocketService.send("DOWNLOAD_FILE", path);
+window.uploadFile = function() {
+    if (FileManagerFeature) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.onchange = (e) => {
+            FileManagerFeature.uploadFile(e.target.files);
+        };
+        input.click();
+    } else {
+        UIManager.showToast("File Manager not loaded yet", "error");
     }
 };
 
-window.reqDeleteFile = function(path) {
-    if(confirm("PERMANENTLY DELETE this file?")) {
-        SocketService.send("DELETE_FILE", path);
-        setTimeout(() => {
-            const currentPath = document.getElementById("current-path")?.textContent;
-            if(currentPath && currentPath !== "My Computer") {
-                window.openFolder(currentPath);
-            }
-        }, 1000);
+window.createNewFolder = function() {
+    // Import FileManagerFeature from features
+    import('../features/fileManager.js').then(module => {
+        const FileManagerFeature = module.FileManagerFeature;
+        if (FileManagerFeature) {
+            FileManagerFeature.createFolder();
+        }
+    });
+};
+
+window.searchFiles = function() {
+    const searchInput = document.getElementById('file-search-input');
+    const searchTerm = searchInput?.value.toLowerCase() || "";
+    const tbody = document.getElementById("file-list-body");
+    const rows = tbody?.getElementsByTagName("tr") || [];
+    
+    for(let row of rows) {
+        const nameCell = row.cells[1]; // Name column
+        if(nameCell) {
+            const fileName = nameCell.textContent.toLowerCase();
+            row.style.display = fileName.includes(searchTerm) ? "" : "none";
+        }
     }
 };
 

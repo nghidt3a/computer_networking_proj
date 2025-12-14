@@ -10,13 +10,17 @@ using System.Runtime.InteropServices;
 
 namespace RemoteControlServer
 {
+    /// <summary>
+    /// Program entry point for the Remote Control Server application.
+    /// It configures Windows DPI settings and starts the ServerCore.
+    /// </summary>
     class Program
     {
         [DllImport("shcore.dll")]
         private static extern int SetProcessDpiAwareness(int processDpiAwareness);
         private const int PROCESS_PER_MONITOR_DPI_AWARE = 2;
 
-        [STAThread] // Bắt buộc để xử lý các tác vụ hệ thống
+        [STAThread] // Required for Windows UI components used by helpers (SendKeys/Forms)
         static void Main(string[] args)
         {
             try {
@@ -34,9 +38,9 @@ namespace RemoteControlServer
             Console.Title = "RCS Agent Core - Port 8181";
 
             // 1. Khởi chạy Server (WebSocket chạy ngầm, không chặn luồng chính)
-            try 
+            try
             {
-                // Gọi hàm Start bên file ServerCore.cs
+                // Start the WebSocket server loop in ServerCore (runs in background threads).
                 ServerCore.Start("ws://0.0.0.0:8181");
             }
             catch (Exception ex)

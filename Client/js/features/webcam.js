@@ -83,24 +83,17 @@ export const WebcamFeature = {
         const statusBadge = document.getElementById("cam-status");
 
         if(camImg) {
-            camImg.style.display = "none";
-            camImg.style.visibility = "hidden";
-            camImg.style.opacity = "0";
-            camImg.src = "";
-            camImg.removeAttribute('src');
-            camImg.className = "";
+            // Fade out first, then clear src after transition
+            camImg.classList.remove('visible');
+            setTimeout(() => {
+                camImg.src = "";
+            }, 350); // Match CSS transition duration
             console.log('✓ Webcam image reset');
         }
         
         if(placeholder) {
-            placeholder.style.removeProperty('display');
-            placeholder.style.removeProperty('visibility');
-            placeholder.style.removeProperty('opacity');
-            placeholder.style.opacity = "1";
-            placeholder.style.display = "block";
-            placeholder.style.visibility = "visible";
-            placeholder.classList.remove('hidden');
-            placeholder.removeAttribute('data-shown');
+            // Restore visibility by removing data-hidden attribute
+            placeholder.removeAttribute('data-hidden');
             console.log('✓ Webcam placeholder shown');
         }
         
@@ -137,11 +130,9 @@ export const WebcamFeature = {
 
         if(camImg) {
             camImg.src = "data:image/jpeg;base64," + payload;
-            camImg.style.display = "block";
-            camImg.style.visibility = "visible";
-            camImg.style.opacity = "1";
-            camImg.style.zIndex = "10";
-            camImg.removeAttribute('hidden');
+            // Trigger reflow to allow transition
+            camImg.offsetHeight;
+            camImg.classList.add('visible');
             
             console.log('✓ Webcam image displayed');
             
@@ -153,20 +144,9 @@ export const WebcamFeature = {
         }
         
         if(placeholder) {
-            // Complete reset of placeholder
-            placeholder.style.removeProperty('display');
-            placeholder.style.removeProperty('visibility');
-            placeholder.style.removeProperty('opacity');
-            placeholder.style.removeProperty('pointer-events');
-            
-            placeholder.style.display = "none";
-            placeholder.style.visibility = "hidden";
-            placeholder.style.opacity = "0";
-            placeholder.style.pointerEvents = "none";
-            
+            // Use class-based approach for smooth fade
             placeholder.classList.add('hidden');
-            placeholder.removeAttribute('data-shown');
-            
+            placeholder.setAttribute('data-hidden', 'true');
             console.log('✓ Webcam placeholder hidden');
         } else {
             console.error('❌ #webcam-placeholder element not found!');

@@ -44,6 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
     KeyloggerFeature.init();
     FileManagerFeature.init();
     TaskManagerFeature.init();
+    
+    // 4. Setup disconnect handler
+    SocketService.on('DISCONNECT', () => {
+        UIManager.showLoginScreen();
+        UIManager.showToast('Disconnected from Server', 'error');
+    });
 });
 function setupMenuToggle() {
     const menuToggle = document.getElementById('menu-toggle');

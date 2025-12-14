@@ -41,12 +41,21 @@
     max-height: 100%;
     object-fit: contain;
     object-position: center center;
-    display: none;
     z-index: 10;
-    transition: transform 0.3s ease;
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                visibility 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.3s ease;
     user-select: none;
     pointer-events: none;
     transform: translate(-50%, -50%);
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* Visible state */
+#webcam-feed.visible {
+    opacity: 1;
+    visibility: visible;
 }
 
 /* Zoom Levels - MUST include translate(-50%, -50%) */
@@ -76,15 +85,16 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                visibility 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Hidden state for placeholder */
-#webcam-placeholder[style*="display: none"],
-#webcam-placeholder.hidden {
-    display: none !important;
-    visibility: hidden !important;
+/* Hidden state for placeholder - smooth fade out */
+#webcam-placeholder[data-hidden="true"] {
     opacity: 0 !important;
+    visibility: hidden !important;
     pointer-events: none !important;
 }
 
